@@ -1,6 +1,7 @@
 # TODO: Pesquisar Quantum Annealing
 from ast import If
 from qiskit import QuantumCircuit, Aer, QuantumRegister, ClassicalRegister, execute
+from qiskit import IBMQ, Aer, transpile, assemble
 from qiskit.visualization import plot_histogram, array_to_latex
 from qiskit.circuit.library import QFT
 from numpy import pi
@@ -8,7 +9,7 @@ import random
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-import itertools
+import qiskit.tools.jupyter
 
 def dimMatriz(matriz):
     qtdLins = len(matriz)
@@ -29,12 +30,11 @@ for i in range(1, n+1):
     G.add_node(i)
 
 
-'''# Parâmetro posição teste
+# Parâmetro posição teste
 pos = {1: [0.75, 1.0],
       2: [0.75, 0.15],
       3: [0.5, -0.5],
       4: [1.0, -0.5]}
-'''
 
 """Adicionar ligações"""
 for i in range(1, n+1):
@@ -122,154 +122,97 @@ nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=20, bbox
 plt.show()
 
 
-at = 0
-bt = pi/2
-ct = pi/8
-dt = pi/4
-
-qt = QuantumRegister(3, 'qt')
-qct = QuantumCircuit(qt)
-
-
-
-
-qct.cp(ct - at, qt[0], qt[1])
-qct.p(at, qt[0])
-qct.cp(bt - at, qt[0], qt[2])
-
-qct.cp((dt - ct + at - bt)/2, qt[1], qt[2])
-qct.cx(qt[0], qt[1])
-qct.cp(-(dt - ct + at - bt)/2, qt[1], qt[2])
-qct.cx(qt[0], qt[1])
-qct.cp((dt - ct + at - bt)/2, qt[0], qt[2])
-
-qct.draw()
-
-backend_unitary_t = Aer.get_backend('unitary_simulator')
-job_unitary_t = execute(qct, backend_unitary_t, shots=8192)
-count_unitary_t = job_unitary_t.result().get_unitary()
-array_to_latex(count_unitary_t, prefix="\\text{Circuit = }\n")
-
-ai = 0
-bi = pi/2
-ci = pi/8
-di = pi/4
-
-qi = QuantumRegister(3, 'qi')
-qci = QuantumCircuit(qi)
-
-
-qci.cp(ci - ai, qi[2], qi[1])
-qci.p(ai, qi[2])
-qci.cp(bi - ai, qi[2], qi[0])
-
-qci.cp((di - ci + ai - bi)/2, qi[1], qi[0])
-qci.cx(qi[2], qi[1])
-qci.cp(-(di - ci + ai - bi)/2, qi[1], qi[0])
-qci.cx(qi[2], qi[1])
-qci.cp((di - ci + ai - bi)/2, qi[2], qi[0])
-
-qci.draw()
-
-backend_unitary_i = Aer.get_backend('unitary_simulator')
-job_unitary_i = execute(qci, backend_unitary_i, shots=8192)
-count_unitary_i = job_unitary_i.result().get_unitary()
-array_to_latex(count_unitary_i, prefix="\\text{Circuit = }\n")
-
-def controlled_unitary(qc, qubits: list, phases: list): # x,y,z = Specific Qubit; a,b,c,d = Phases
-    qc.cp(phases[2]-phases[0], qubits[0], qubits[1]) # controlled-U1(c-a)
+def unitario_controlado(qc, qubits: list, phases: list): # x,y,z = Qubit; a,b,c,d = Fases
+    qc.cp(phases[2]-phases[0], qubits[0], qubits[1]) # controlado-U1(c-a)
     qc.p(phases[0], qubits[0]) # U1(a)
-    qc.cp(phases[1]-phases[0], qubits[0], qubits[2]) # controlled-U1(b-a)
+    qc.cp(phases[1]-phases[0], qubits[0], qubits[2]) # controlado-U1(b-a)
     
-    # controlled controlled U1(d-c+a-b)
+    # controlado do controlado U1(d-c+a-b)
     qc.cp((phases[3]-phases[2]+phases[0]-phases[1])/2, qubits[1], qubits[2])
     qc.cx(qubits[0], qubits[1])
     qc.cp(-(phases[3]-phases[2]+phases[0]-phases[1])/2, qubits[1], qubits[2])
     qc.cx(qubits[0], qubits[1])
     qc.cp((phases[3]-phases[2]+phases[0]-phases[1])/2, qubits[0], qubits[2])
 
-def U(times, qc, unit, eigen, phases: list): # a,b,c = phases for U1; d,e,f = phases for U2; g,h,i = phases for U3; j,k,l = phases for U4; m_list=[m, n, o, p, q, r, s, t, u, a, b, c, d, e, f, g, h, i, j, k, l]
-    controlled_unitary(qc, [unit[0]]+eigen[0:2], [0]+phases[0:3])
-    controlled_unitary(qc, [unit[0]]+eigen[2:4], [phases[3]]+[0]+phases[4:6])
-    controlled_unitary(qc, [unit[0]]+eigen[4:6], phases[6:8]+[0]+[phases[8]])
-    controlled_unitary(qc, [unit[0]]+eigen[6:8], phases[9:12]+[0])
 
-def final_U(times, eigen, phases: list):
+def U(times, qc, unit, eigen, ases: list): # a,b,c = fases do U1; d,e,f = fases do U2; g,h,i = fases do U3; j,k,l = fases do U4; lista=[m, n, o, p, q, r, s, t, u, a, b, c, d, e, f, g, h, i, j, k, l]
+    unitario_controlado(qc, [unit[0]]+eigen[0:2], [0]+phases[0:3])
+    unitario_controlado(qc, [unit[0]]+eigen[2:4], [phases[3]]+[0]+phases[4:6])
+    unitario_controlado(qc, [unit[0]]+eigen[4:6], phases[6:8]+[0]+[phases[8]])
+    unitario_controlado(qc, [unit[0]]+eigen[6:8], phases[9:12]+[0])
+
+
+def U_final(times, eigen, phases: list):
     unit = QuantumRegister(1, 'unit')
     qc = QuantumCircuit(unit, eigen)
     for _ in range(2**times):
         U(times, qc, unit, eigen, phases)
     return qc.to_gate(label='U'+'_'+(str(2**times)))
 
-# Storing the eigenvalues in a list
-eigen_values = []
 
-for i in range(2):
-    for j in range(2):
-        for k in range(2):
-            for l in range(2):
-                for m in range(2):
-                    for n in range(2):
-                        for o in range(2):
-                            for p in range(2):
-                                valor = f'{i}{j}{k}{l}{m}{n}{o}{p}'
-                                eigen_values.append(valor)
-                          
+# Autovalores
+# TODO: gerador de auto valores automatico
 
-# eigen_values = ["11000110", "10001101", "11001001"]
+auto_valor = ["11000110", "10001101", "11001001"]
 
-# Function to place appropriate corresponding gate according to eigenstates
-def eigenstates(qc, eigen, index):
+# Portas especificas dos autoestados
+def autoestado(qc, eigen, index):
     for i in range(0, len(eigen)):
-        if eigen_values[index][i] == '1':
+        if auto_valor[index][i] == '1':
             qc.x(eigen[i])
-        if eigen_values[index][i] == '0':
+        if auto_valor[index][i] == '0':
             pass
     qc.barrier()
     return qc
 
-# Initialization
+
+# Inicialização
 unit = QuantumRegister(6, 'unit')
 eigen = QuantumRegister(8, 'eigen')
-unit_classical = ClassicalRegister(6, 'unit_classical')
-qc = QuantumCircuit(unit, eigen, unit_classical)
-#
+classico = ClassicalRegister(6, 'classico')
+qc = QuantumCircuit(unit, eigen, classico)
 
-# Setting one eigenstate 
-# Playing with the first eigenstate here i.e. 11000110 from eigen_values list.
-# (Try to play with other eigenstates from the eigen_values list)
-for x in range(len(eigen_values)):
-    eigenstates(qc, eigen, x)
-#
 
-# Hadamard on the 'unit' qubits
+
+# Usando um autoestado específico
+autoestado(qc, eigen, 0)
+
+
+
+# Hadamard nos qubits controles
 qc.h(unit[:])
 qc.barrier()
-#
 
-# Controlled Unitary  
+
+# Unitário controlado
 phases = [pi / 2, pi / 8, pi / 4, pi / 2, pi / 4, pi / 4, pi / 8, pi / 4, pi / 8, pi / 4, pi / 4, pi / 8] # a, b, c, d, e, f, g, h, i, j, k, l
 for i in range(0, 6):
-    qc.append(final_U(i, eigen, phases), [unit[5-i]] + eigen[:])
-#
+    qc.append(U_final(i, eigen, phases), [unit[5-i]] + eigen[:])
+
 
 # Inverse QFT 
 qc.barrier()
 qft = QFT(num_qubits=len(unit), inverse=True, insert_barriers=True, do_swaps=False, name='Inverse QFT')
 qc.append(qft, qc.qubits[:len(unit)])
 qc.barrier()
-#
 
-# Measure
-qc.measure(unit, unit_classical)
-#
 
-# Draw
+# Medida
+qc.measure(unit, classico)
+
+
+# Circuito
 qc.draw()
 
+# Histograma
 backend = Aer.get_backend('qasm_simulator')
-job = execute(qc, backend, shots=8192)
-count = job.result().get_counts()
-print(count)
-plot_histogram(count)
+shots = 10000
+t_qc = transpile(qc, backend)
+qobj = assemble(t_qc, shots=shots)
+resuts = backend.run(qobj).result()
+answer = resuts.get_counts()
+
+
+print(answer)
+plot_histogram(answer)
 
